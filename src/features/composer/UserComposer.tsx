@@ -443,7 +443,7 @@ export function UserComposer({ template, variant, selectedVariantId, onSelectVar
             <input
               type="range"
               min="1"
-              max="3"
+              max="4"
               step="0.01"
               disabled={!selectedPhoto}
               value={selectedPhoto?.scale ?? 1}

@@ -1,5 +1,10 @@
 import { Trash2 } from "lucide-react";
-import type { CSSProperties, DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from "react";
+import type {
+  CSSProperties,
+  DragEvent as ReactDragEvent,
+  PointerEvent as ReactPointerEvent,
+  WheelEvent as ReactWheelEvent
+} from "react";
 import { useEffect, useRef, useState } from "react";
 import type { SlotPhoto } from "../../lib/canvas/drawTemplate";
 import type { PhotoSlot, TemplateVariant, TextLayer } from "../../lib/template/types";
@@ -89,6 +94,7 @@ export function ClientTemplateCanvas({
   const interactionRef = useRef<CanvasInteraction | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
+  const wheelHistoryTimerRef = useRef<number | null>(null);
   const [hostSize, setHostSize] = useState({ width: 720, height: 640 });
   const [isDragOver, setIsDragOver] = useState(false);
   const scale = Math.max(
@@ -115,6 +121,14 @@ export function ClientTemplateCanvas({
     observer.observe(measuredHost);
 
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (wheelHistoryTimerRef.current) {
+        window.clearTimeout(wheelHistoryTimerRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -187,6 +201,47 @@ export function ClientTemplateCanvas({
       offsetY: photo.offsetY,
       scale
     };
+  }
+
+  function handlePhotoWheel(event: ReactWheelEvent<HTMLDivElement>, photo: SlotPhoto, slot: PhotoSlot) {
+    event.preventDefault();
+    event.stopPropagation();
+    onSelectSlot(photo.slotId);
+
+    if (!wheelHistoryTimerRef.current) onBeforeInteractiveChange();
+    if (wheelHistoryTimerRef.current) window.clearTimeout(wheelHistoryTimerRef.current);
+    wheelHistoryTimerRef.current = window.setTimeout(() => {
+      wheelHistoryTimerRef.current = null;
+    }, 240);
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const localX = (event.clientX - rect.left) / scale;
+    const localY = (event.clientY - rect.top) / scale;
+    const zoomFactor = event.deltaY < 0 ? 1.08 : 0.92;
+    const nextScale = clamp(photo.scale * zoomFactor, 1, 4);
+    if (nextScale === photo.scale) return;
+
+    const naturalWidth = Math.max(1, photo.naturalWidth);
+    const naturalHeight = Math.max(1, photo.naturalHeight);
+    const coverScale = Math.max(slot.width / naturalWidth, slot.height / naturalHeight);
+    const currentWidth = naturalWidth * coverScale * photo.scale;
+    const currentHeight = naturalHeight * coverScale * photo.scale;
+    const nextWidth = naturalWidth * coverScale * nextScale;
+    const nextHeight = naturalHeight * coverScale * nextScale;
+    const currentLeft = (slot.width - currentWidth) / 2 + photo.offsetX;
+    const currentTop = (slot.height - currentHeight) / 2 + photo.offsetY;
+    const anchorX = (localX - currentLeft) / currentWidth;
+    const anchorY = (localY - currentTop) / currentHeight;
+
+    onPhotoTransform(
+      photo.slotId,
+      {
+        scale: Number(nextScale.toFixed(3)),
+        offsetX: Math.round(localX - anchorX * nextWidth - (slot.width - nextWidth) / 2),
+        offsetY: Math.round(localY - anchorY * nextHeight - (slot.height - nextHeight) / 2)
+      },
+      false
+    );
   }
 
   function startTextMove(event: ReactPointerEvent<HTMLDivElement>, layer: TextLayer) {
@@ -396,6 +451,7 @@ export function ClientTemplateCanvas({
               style={hitStyle}
               onFocus={() => onSelectSlot(slot.id)}
               onPointerDown={(event) => startCropMove(event, photo)}
+              onWheel={(event) => handlePhotoWheel(event, photo, slot)}
             >
               <label
                 className="change-photo-button"
