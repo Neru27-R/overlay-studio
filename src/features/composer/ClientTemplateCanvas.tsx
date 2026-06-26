@@ -271,7 +271,7 @@ export function ClientTemplateCanvas({
           const photo = photos.find((item) => item.slotId === slot.id);
           return (
             <div
-              className={`slot-preview photo-layer ${slot.shape}`}
+              className={`slot-preview photo-layer ${slot.shape} ${photo ? "has-photo" : "is-empty"}`}
               key={slot.id}
               style={{
                 left: slot.x * scale,
@@ -368,7 +368,9 @@ export function ClientTemplateCanvas({
               <label
                 className={`client-slot-hit ${slot.shape}`}
                 key={slot.id}
+                aria-label={`上傳到 ${slot.label}`}
                 style={hitStyle}
+                title={`上傳到 ${slot.label}`}
                 onClick={() => onSelectSlot(slot.id)}
               >
                 <input
@@ -380,7 +382,7 @@ export function ClientTemplateCanvas({
                     event.target.value = "";
                   }}
                 />
-                <span>{slot.label}</span>
+                <span aria-hidden="true">+</span>
               </label>
             );
           }

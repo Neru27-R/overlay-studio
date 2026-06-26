@@ -228,6 +228,18 @@ export function UserComposer({ template, variant, selectedVariantId, onSelectVar
     setSelectedTextId(null);
   }
 
+  function deleteSelectedPhoto() {
+    if (!selectedSlotId) return;
+    const hasPhoto = compositionRef.current.photos.some((photo) => photo.slotId === selectedSlotId);
+    if (!hasPhoto) return;
+
+    updateComposition((current) => ({
+      ...current,
+      photos: current.photos.filter((photo) => photo.slotId !== selectedSlotId)
+    }));
+    setSelectedSlotId(null);
+  }
+
   function centerSelectedPhoto() {
     if (!selectedSlotId) return;
     updatePhotoTransform(selectedSlotId, {
@@ -273,15 +285,19 @@ export function UserComposer({ template, variant, selectedVariantId, onSelectVar
         return;
       }
 
-      if ((event.key === "Delete" || event.key === "Backspace") && selectedTextId && !isTyping) {
+      if ((event.key === "Delete" || event.key === "Backspace") && !isTyping) {
         event.preventDefault();
-        deleteTextLayer(selectedTextId);
+        if (selectedTextId) {
+          deleteTextLayer(selectedTextId);
+          return;
+        }
+        deleteSelectedPhoto();
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedTextId, history]);
+  }, [selectedSlotId, selectedTextId, history]);
 
   useEffect(() => {
     function handlePointerDown(event: PointerEvent) {

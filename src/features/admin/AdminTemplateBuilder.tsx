@@ -9,6 +9,7 @@ import {
   AlignStartVertical,
   AlignVerticalDistributeCenter,
   AlignVerticalSpaceBetween,
+  ChevronDown,
   Copy,
   CopyPlus,
   Download,
@@ -107,6 +108,7 @@ export function AdminTemplateBuilder({
   const [alignTarget, setAlignTarget] = useState<AlignTarget>("canvas");
   const [distributeGap, setDistributeGap] = useState(24);
   const [history, setHistory] = useState<PhotoTemplate[]>([]);
+  const [expandedSlotIds, setExpandedSlotIds] = useState<string[]>([]);
 
   const activeVariant = useMemo(() => {
     return template.variants.find((variant) => variant.id === activeVariantId) ?? template.variants[0];
@@ -132,6 +134,7 @@ export function AdminTemplateBuilder({
       if (existingIds.length > 0) return existingIds;
       return activeVariant.slots[0]?.id ? [activeVariant.slots[0].id] : [];
     });
+    setExpandedSlotIds((currentIds) => currentIds.filter((id) => activeVariant.slots.some((slot) => slot.id === id)));
   }, [activeVariant.id, activeVariant.slots]);
 
   useEffect(() => {
@@ -152,6 +155,12 @@ export function AdminTemplateBuilder({
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "d" && !isTyping) {
         event.preventDefault();
         duplicateSlots();
+        return;
+      }
+
+      if ((event.key === "Backspace" || event.key === "Delete") && selectedSlotIds.length > 0 && !isTyping) {
+        event.preventDefault();
+        removeSelectedSlots();
         return;
       }
 
@@ -225,6 +234,12 @@ export function AdminTemplateBuilder({
     });
   }
 
+  function toggleSlotDetails(slotId: string) {
+    setExpandedSlotIds((currentIds) =>
+      currentIds.includes(slotId) ? currentIds.filter((id) => id !== slotId) : [...currentIds, slotId]
+    );
+  }
+
   function addVariant() {
     const nextVariant = {
       ...cloneVariant(activeVariant),
@@ -250,7 +265,7 @@ export function AdminTemplateBuilder({
   function addSlot() {
     const nextSlot: PhotoSlot = {
       id: `slot-${Date.now()}`,
-      label: "pic",
+      label: getNextSlotLabel(),
       x: Math.round(activeVariant.output.width * 0.18),
       y: Math.round(activeVariant.output.height * 0.18),
       width: Math.round(activeVariant.output.width * 0.28),
@@ -263,6 +278,16 @@ export function AdminTemplateBuilder({
       slots: [...activeVariant.slots, nextSlot]
     });
     setSelectedSlotIds([nextSlot.id]);
+  }
+
+  function getNextSlotLabel() {
+    const nextNumber =
+      activeVariant.slots.reduce((max, slot) => {
+        const match = slot.label.trim().match(/^pic\s*(\d+)$/i);
+        return match ? Math.max(max, Number(match[1])) : max;
+      }, 0) + 1;
+
+    return `pic ${nextNumber}`;
   }
 
   function duplicateSlots(slotIds = selectedSlotIds) {
@@ -289,8 +314,19 @@ export function AdminTemplateBuilder({
 
   function removeSlot(slotId: string) {
     setSelectedSlotIds((currentIds) => currentIds.filter((id) => id !== slotId));
+    setExpandedSlotIds((currentIds) => currentIds.filter((id) => id !== slotId));
     updateActiveVariant({
       slots: activeVariant.slots.filter((slot) => slot.id !== slotId)
+    });
+  }
+
+  function removeSelectedSlots() {
+    if (selectedSlotIds.length === 0) return;
+    const selectedIds = new Set(selectedSlotIds);
+    setSelectedSlotIds([]);
+    setExpandedSlotIds((currentIds) => currentIds.filter((id) => !selectedIds.has(id)));
+    updateActiveVariant({
+      slots: activeVariant.slots.filter((slot) => !selectedIds.has(slot.id))
     });
   }
 
@@ -698,7 +734,7 @@ export function AdminTemplateBuilder({
               </button>
             </div>
 
-            <div className="alignment-grid">
+            <div className="alignment-grid align-core">
               <button type="button" disabled={selectedSlotIds.length === 0} onClick={() => alignSelectedSlots("left")}>
                 <AlignStartVertical size={17} />
                 靠左
@@ -765,15 +801,29 @@ export function AdminTemplateBuilder({
           </div>
 
           <div className="slot-list">
-            {activeVariant.slots.map((slot) => (
+            {activeVariant.slots.map((slot) => {
+              const isExpanded = expandedSlotIds.includes(slot.id);
+              return (
               <article
                 className={`slot-card ${selectedSlotIds.includes(slot.id) ? "is-selected" : ""} ${
                   keySlot?.id === slot.id && selectedSlotIds.length > 1 ? "is-key-object" : ""
-                }`}
+                } ${isExpanded ? "is-expanded" : ""}`}
                 key={slot.id}
                 onClick={(event) => selectSlot(slot.id, event.shiftKey || event.ctrlKey || event.metaKey)}
               >
                 <div className="slot-title">
+                  <button
+                    className="slot-details-toggle"
+                    aria-label={`${isExpanded ? "收合" : "展開"} ${slot.label}`}
+                    aria-expanded={isExpanded}
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggleSlotDetails(slot.id);
+                    }}
+                  >
+                    <ChevronDown size={16} />
+                  </button>
                   <input value={slot.label} onChange={(event) => updateSlot(slot.id, { label: event.target.value })} />
                   <button
                     aria-label={`複製 ${slot.label}`}
@@ -797,7 +847,8 @@ export function AdminTemplateBuilder({
                   </button>
                 </div>
 
-                <div className="field-grid">
+                {isExpanded ? (
+                <div className="field-grid slot-detail-grid">
                   <NumberField label="W" value={slot.width} onChange={(value) => updateSlot(slot.id, { width: value })} />
                   <NumberField label="H" value={slot.height} onChange={(value) => updateSlot(slot.id, { height: value })} />
                   <NumberField label="角度" value={slot.rotation} onChange={(value) => updateSlot(slot.id, { rotation: value })} />
@@ -810,8 +861,10 @@ export function AdminTemplateBuilder({
                     </select>
                   </label>
                 </div>
+                ) : null}
               </article>
-            ))}
+              );
+            })}
           </div>
         </aside>
 
