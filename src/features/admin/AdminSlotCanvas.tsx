@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type { DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from "react";
 import type { PhotoSlot, TemplateVariant } from "../../lib/template/types";
 
 type Props = {
   variant: TemplateVariant;
   selectedSlotIds: string[];
   onSelectSlot: (slotId: string, additive?: boolean) => void;
-  onSlotChange: (slotId: string, patch: Partial<PhotoSlot>) => void;
-  onSlotsChange: (patches: Record<string, Partial<PhotoSlot>>) => void;
+  onSlotChange: (slotId: string, patch: Partial<PhotoSlot>, remember?: boolean) => void;
+  onSlotsChange: (patches: Record<string, Partial<PhotoSlot>>, remember?: boolean) => void;
+  onBeforeInteractiveChange: () => void;
+  onOverlayDrop: (file: File) => void;
 };
 
 type ResizeHandle = "nw" | "ne" | "sw" | "se";
@@ -20,6 +22,7 @@ type Interaction = {
   startX: number;
   startY: number;
   scale: number;
+  remembered: boolean;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -31,11 +34,14 @@ export function AdminSlotCanvas({
   selectedSlotIds,
   onSelectSlot,
   onSlotChange,
-  onSlotsChange
+  onSlotsChange,
+  onBeforeInteractiveChange,
+  onOverlayDrop
 }: Props) {
   const interactionRef = useRef<Interaction | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [hostSize, setHostSize] = useState({ width: 720, height: 640 });
+  const [isDragOver, setIsDragOver] = useState(false);
   const scale = Math.max(
     0.05,
     Math.min(hostSize.width / variant.output.width, hostSize.height / variant.output.height)
@@ -70,6 +76,13 @@ export function AdminSlotCanvas({
       const dx = (event.clientX - interaction.startX) / interaction.scale;
       const dy = (event.clientY - interaction.startY) / interaction.scale;
       const slot = interaction.slot;
+      const moved = Math.abs(event.clientX - interaction.startX) + Math.abs(event.clientY - interaction.startY) > 2;
+      if (!moved) return;
+
+      if (!interaction.remembered) {
+        onBeforeInteractiveChange();
+        interaction.remembered = true;
+      }
 
       if (interaction.type === "move") {
         const patches = Object.fromEntries(
@@ -81,7 +94,7 @@ export function AdminSlotCanvas({
             }
           ])
         );
-        onSlotsChange(patches);
+        onSlotsChange(patches, false);
         return;
       }
 
@@ -114,7 +127,7 @@ export function AdminSlotCanvas({
         y: Math.round(nextY),
         width: Math.round(nextWidth),
         height: Math.round(nextHeight)
-      });
+      }, false);
     }
 
     function handlePointerUp() {
@@ -130,7 +143,7 @@ export function AdminSlotCanvas({
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
     };
-  }, [onSlotChange, onSlotsChange, variant]);
+  }, [onBeforeInteractiveChange, onSlotChange, onSlotsChange, variant]);
 
   function startMove(event: ReactPointerEvent<HTMLDivElement>, slot: PhotoSlot) {
     event.preventDefault();
@@ -154,7 +167,8 @@ export function AdminSlotCanvas({
           : variant.slots.filter((item) => nextSelectedIds.includes(item.id)),
       startX: event.clientX,
       startY: event.clientY,
-      scale
+      scale,
+      remembered: false
     };
   }
 
@@ -169,12 +183,33 @@ export function AdminSlotCanvas({
       movingSlots: [slot],
       startX: event.clientX,
       startY: event.clientY,
-      scale
+      scale,
+      remembered: false
     };
   }
 
+  function handleDragOver(event: ReactDragEvent<HTMLDivElement>) {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setIsDragOver(true);
+  }
+
+  function handleDrop(event: ReactDragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setIsDragOver(false);
+    const file = Array.from(event.dataTransfer.files).find((item) => item.type.startsWith("image/"));
+    if (file) onOverlayDrop(file);
+  }
+
   return (
-    <div className="preview-frame-host" ref={hostRef}>
+    <div
+      className={`preview-frame-host drop-zone ${isDragOver ? "is-drag-over" : ""}`}
+      ref={hostRef}
+      onDragLeave={() => setIsDragOver(false)}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       <div className="preview-frame editor-frame no-save" style={{ width, height }}>
         <img className="overlay-image editor-overlay" src={variant.overlayUrl} alt={variant.name} draggable={false} />
 
@@ -188,7 +223,9 @@ export function AdminSlotCanvas({
               role="button"
               tabIndex={0}
               onPointerDown={(event) => startMove(event, slot)}
-              onFocus={() => onSelectSlot(slot.id)}
+              onFocus={() => {
+                if (!interactionRef.current && !selectedSlotIds.includes(slot.id)) onSelectSlot(slot.id);
+              }}
               style={{
                 left: slot.x * scale,
                 top: slot.y * scale,

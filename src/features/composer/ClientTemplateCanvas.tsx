@@ -1,5 +1,5 @@
 import { Trash2 } from "lucide-react";
-import type { CSSProperties, ChangeEvent, PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties, DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { SlotPhoto } from "../../lib/canvas/drawTemplate";
 import type { PhotoSlot, TemplateVariant, TextLayer } from "../../lib/template/types";
@@ -10,7 +10,7 @@ type Props = {
   selectedSlotId: string | null;
   selectedTextId: string | null;
   textLayers: TextLayer[];
-  onPhotoChange: (slotId: string, event: ChangeEvent<HTMLInputElement>) => void;
+  onPhotoChange: (slotId: string, file: File) => void;
   onPhotoTransform: (
     slotId: string,
     patch: Partial<Pick<SlotPhoto, "offsetX" | "offsetY" | "scale">>,
@@ -88,7 +88,9 @@ export function ClientTemplateCanvas({
 }: Props) {
   const interactionRef = useRef<CanvasInteraction | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const frameRef = useRef<HTMLDivElement | null>(null);
   const [hostSize, setHostSize] = useState({ width: 720, height: 640 });
+  const [isDragOver, setIsDragOver] = useState(false);
   const scale = Math.max(
     0.05,
     Math.min(hostSize.width / variant.output.width, hostSize.height / variant.output.height)
@@ -218,9 +220,53 @@ export function ClientTemplateCanvas({
     };
   }
 
+  function selectDropSlot(event: ReactDragEvent<HTMLDivElement>) {
+    const fallbackSlot =
+      variant.slots.find((slot) => slot.id === selectedSlotId) ??
+      variant.slots[0] ??
+      null;
+    const frame = frameRef.current;
+    if (!frame) return fallbackSlot;
+
+    const rect = frame.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / scale;
+    const y = (event.clientY - rect.top) / scale;
+    return (
+      [...variant.slots]
+        .reverse()
+        .find((slot) => x >= slot.x && x <= slot.x + slot.width && y >= slot.y && y <= slot.y + slot.height) ??
+      fallbackSlot
+    );
+  }
+
+  function handleDragOver(event: ReactDragEvent<HTMLDivElement>) {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setIsDragOver(true);
+  }
+
+  function handleDrop(event: ReactDragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setIsDragOver(false);
+    const file = Array.from(event.dataTransfer.files).find((item) => item.type.startsWith("image/"));
+    const slot = file ? selectDropSlot(event) : null;
+    if (!file || !slot) return;
+
+    onSelectSlot(slot.id);
+    onPhotoChange(slot.id, file);
+  }
+
   return (
     <div className="preview-frame-host" ref={hostRef}>
-      <div className="preview-frame client-frame no-save" style={{ width, height }}>
+      <div
+        className={`preview-frame client-frame no-save drop-zone ${isDragOver ? "is-drag-over" : ""}`}
+        ref={frameRef}
+        style={{ width, height }}
+        onDragLeave={() => setIsDragOver(false)}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
         {variant.slots.map((slot) => {
           const photo = photos.find((item) => item.slotId === slot.id);
           return (
@@ -328,7 +374,11 @@ export function ClientTemplateCanvas({
                 <input
                   accept="image/png,image/jpeg,image/webp"
                   type="file"
-                  onChange={(event) => onPhotoChange(slot.id, event)}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) onPhotoChange(slot.id, file);
+                    event.target.value = "";
+                  }}
                 />
                 <span>{slot.label}</span>
               </label>
@@ -353,7 +403,11 @@ export function ClientTemplateCanvas({
                 <input
                   accept="image/png,image/jpeg,image/webp"
                   type="file"
-                  onChange={(event) => onPhotoChange(slot.id, event)}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) onPhotoChange(slot.id, file);
+                    event.target.value = "";
+                  }}
                 />
                 更換
               </label>

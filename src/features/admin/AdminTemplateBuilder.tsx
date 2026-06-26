@@ -1,18 +1,26 @@
 import {
+  AlignHorizontalDistributeCenter,
+  AlignHorizontalSpaceBetween,
   AlignCenterHorizontal,
   AlignCenterVertical,
   AlignEndHorizontal,
   AlignEndVertical,
   AlignStartHorizontal,
   AlignStartVertical,
+  AlignVerticalDistributeCenter,
+  AlignVerticalSpaceBetween,
   Copy,
+  CopyPlus,
   Download,
   FileUp,
   ImagePlus,
   Menu,
+  Maximize2,
   Plus,
   RotateCcw,
   Save,
+  StretchHorizontal,
+  StretchVertical,
   Trash2,
   Undo2,
   X
@@ -141,6 +149,12 @@ export function AdminTemplateBuilder({
         return;
       }
 
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "d" && !isTyping) {
+        event.preventDefault();
+        duplicateSlots();
+        return;
+      }
+
       if (isTyping || selectedSlotIds.length === 0) return;
 
       const distance = event.shiftKey ? 10 : 1;
@@ -161,8 +175,12 @@ export function AdminTemplateBuilder({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedSlotIds, activeVariant, history]);
 
-  function commit(nextTemplate: PhotoTemplate) {
+  function rememberCurrentTemplate() {
     setHistory((items) => [withPrimaryMirror(template), ...items].slice(0, HISTORY_LIMIT));
+  }
+
+  function commit(nextTemplate: PhotoTemplate, remember = true) {
+    if (remember) rememberCurrentTemplate();
     onTemplateChange(withPrimaryMirror(nextTemplate));
   }
 
@@ -174,27 +192,27 @@ export function AdminTemplateBuilder({
     });
   }
 
-  function updateTemplate(patch: Partial<PhotoTemplate>) {
-    commit({ ...template, ...patch });
+  function updateTemplate(patch: Partial<PhotoTemplate>, remember = true) {
+    commit({ ...template, ...patch }, remember);
   }
 
-  function updateActiveVariant(patch: Partial<TemplateVariant>) {
+  function updateActiveVariant(patch: Partial<TemplateVariant>, remember = true) {
     commit({
       ...template,
       variants: template.variants.map((variant) =>
         variant.id === activeVariant.id ? cloneVariant({ ...variant, ...patch }) : cloneVariant(variant)
       )
-    });
+    }, remember);
   }
 
-  function updateSlot(slotId: string, patch: Partial<PhotoSlot>) {
-    updateSlots({ [slotId]: patch });
+  function updateSlot(slotId: string, patch: Partial<PhotoSlot>, remember = true) {
+    updateSlots({ [slotId]: patch }, remember);
   }
 
-  function updateSlots(patches: Record<string, Partial<PhotoSlot>>) {
+  function updateSlots(patches: Record<string, Partial<PhotoSlot>>, remember = true) {
     updateActiveVariant({
       slots: activeVariant.slots.map((slot) => (patches[slot.id] ? { ...slot, ...patches[slot.id] } : slot))
-    });
+    }, remember);
   }
 
   function selectSlot(slotId: string, additive = false) {
@@ -230,22 +248,43 @@ export function AdminTemplateBuilder({
   }
 
   function addSlot() {
-    const nextIndex = activeVariant.slots.length + 1;
     const nextSlot: PhotoSlot = {
       id: `slot-${Date.now()}`,
-      label: `圖框 ${nextIndex}`,
+      label: "pic",
       x: Math.round(activeVariant.output.width * 0.18),
       y: Math.round(activeVariant.output.height * 0.18),
       width: Math.round(activeVariant.output.width * 0.28),
       height: Math.round(activeVariant.output.height * 0.36),
       rotation: 0,
-      shape: "rounded"
+      shape: "rect"
     };
 
     updateActiveVariant({
       slots: [...activeVariant.slots, nextSlot]
     });
     setSelectedSlotIds([nextSlot.id]);
+  }
+
+  function duplicateSlots(slotIds = selectedSlotIds) {
+    const sourceSlots = activeVariant.slots.filter((slot) => slotIds.includes(slot.id));
+    if (sourceSlots.length === 0) return;
+
+    const now = Date.now();
+    const copies = sourceSlots.map((slot, index) => {
+      const copy: PhotoSlot = {
+        ...slot,
+        id: `slot-${now}-${index}`,
+        label: slot.label || "pic",
+        x: Math.min(slot.x + 24, Math.max(0, activeVariant.output.width - slot.width)),
+        y: Math.min(slot.y + 24, Math.max(0, activeVariant.output.height - slot.height))
+      };
+      return copy;
+    });
+
+    updateActiveVariant({
+      slots: [...activeVariant.slots, ...copies]
+    });
+    setSelectedSlotIds(copies.map((slot) => slot.id));
   }
 
   function removeSlot(slotId: string) {
@@ -393,9 +432,8 @@ export function AdminTemplateBuilder({
     );
   }
 
-  async function handleOverlayUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  async function applyOverlayFile(file: File) {
+    if (!file.type.startsWith("image/")) return;
 
     const previewUrl = URL.createObjectURL(file);
     const image = await loadImage(previewUrl);
@@ -414,6 +452,13 @@ export function AdminTemplateBuilder({
       },
       slots: []
     });
+  }
+
+  async function handleOverlayUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    await applyOverlayFile(file);
     event.target.value = "";
   }
 
@@ -641,6 +686,18 @@ export function AdminTemplateBuilder({
               </button>
             </div>
 
+            <div className="button-row compact">
+              <button
+                className="secondary-button inline"
+                type="button"
+                disabled={selectedSlotIds.length === 0}
+                onClick={() => duplicateSlots()}
+              >
+                <CopyPlus size={17} />
+                複製選取
+              </button>
+            </div>
+
             <div className="alignment-grid">
               <button type="button" disabled={selectedSlotIds.length === 0} onClick={() => alignSelectedSlots("left")}>
                 <AlignStartVertical size={17} />
@@ -670,9 +727,11 @@ export function AdminTemplateBuilder({
 
             <div className="alignment-grid dense">
               <button type="button" disabled={selectedSlotIds.length < 3} onClick={() => distributeSelectedSlots("horizontal", "space")}>
+                <AlignHorizontalSpaceBetween size={17} />
                 水平分散
               </button>
               <button type="button" disabled={selectedSlotIds.length < 3} onClick={() => distributeSelectedSlots("vertical", "space")}>
+                <AlignVerticalSpaceBetween size={17} />
                 垂直分散
               </button>
               <label className="mini-field">
@@ -680,21 +739,26 @@ export function AdminTemplateBuilder({
                 <input type="number" value={distributeGap} onChange={(event) => setDistributeGap(Number(event.target.value))} />
               </label>
               <button type="button" disabled={selectedSlotIds.length < 2} onClick={() => distributeSelectedSlots("horizontal", "gap")}>
+                <AlignHorizontalDistributeCenter size={17} />
                 水平等距
               </button>
               <button type="button" disabled={selectedSlotIds.length < 2} onClick={() => distributeSelectedSlots("vertical", "gap")}>
+                <AlignVerticalDistributeCenter size={17} />
                 垂直等距
               </button>
             </div>
 
             <div className="alignment-grid dense">
               <button type="button" disabled={selectedSlotIds.length < 2} onClick={() => matchSelectedSize("width")}>
+                <StretchHorizontal size={17} />
                 同寬
               </button>
               <button type="button" disabled={selectedSlotIds.length < 2} onClick={() => matchSelectedSize("height")}>
+                <StretchVertical size={17} />
                 同高
               </button>
               <button type="button" disabled={selectedSlotIds.length < 2} onClick={() => matchSelectedSize("both")}>
+                <Maximize2 size={17} />
                 同尺寸
               </button>
             </div>
@@ -712,6 +776,16 @@ export function AdminTemplateBuilder({
                 <div className="slot-title">
                   <input value={slot.label} onChange={(event) => updateSlot(slot.id, { label: event.target.value })} />
                   <button
+                    aria-label={`複製 ${slot.label}`}
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      duplicateSlots([slot.id]);
+                    }}
+                  >
+                    <CopyPlus size={16} />
+                  </button>
+                  <button
                     aria-label={`刪除 ${slot.label}`}
                     type="button"
                     onClick={(event) => {
@@ -724,8 +798,6 @@ export function AdminTemplateBuilder({
                 </div>
 
                 <div className="field-grid">
-                  <NumberField label="X" value={slot.x} onChange={(value) => updateSlot(slot.id, { x: value })} />
-                  <NumberField label="Y" value={slot.y} onChange={(value) => updateSlot(slot.id, { y: value })} />
                   <NumberField label="W" value={slot.width} onChange={(value) => updateSlot(slot.id, { width: value })} />
                   <NumberField label="H" value={slot.height} onChange={(value) => updateSlot(slot.id, { height: value })} />
                   <NumberField label="角度" value={slot.rotation} onChange={(value) => updateSlot(slot.id, { rotation: value })} />
@@ -769,6 +841,8 @@ export function AdminTemplateBuilder({
             onSelectSlot={selectSlot}
             onSlotChange={updateSlot}
             onSlotsChange={updateSlots}
+            onBeforeInteractiveChange={rememberCurrentTemplate}
+            onOverlayDrop={applyOverlayFile}
           />
         </section>
       </section>

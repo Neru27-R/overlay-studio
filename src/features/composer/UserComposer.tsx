@@ -13,7 +13,7 @@ import {
   Undo2,
   X
 } from "lucide-react";
-import type { ChangeEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GOOGLE_FONTS, loadGoogleFont, preloadDefaultFonts } from "../../config/googleFonts";
 import { renderTemplateToCanvas, type SlotPhoto } from "../../lib/canvas/drawTemplate";
@@ -141,10 +141,8 @@ export function UserComposer({ template, variant, selectedVariantId, onSelectVar
     });
   }
 
-  async function setSlotPhoto(slotId: string, event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  async function setSlotPhoto(slotId: string, file: File) {
+    if (!file.type.startsWith("image/")) return;
     const url = URL.createObjectURL(file);
 
     try {
@@ -168,8 +166,6 @@ export function UserComposer({ template, variant, selectedVariantId, onSelectVar
       setSelectedTextId(null);
     } catch {
       URL.revokeObjectURL(url);
-    } finally {
-      event.target.value = "";
     }
   }
 
