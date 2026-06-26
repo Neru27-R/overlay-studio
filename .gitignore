@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.pnpm-store/
+.chrome-test/
+.chrome-test-2/
+
+.env
+.env.local
+.env.*.local
+
+*.log
+open.html
