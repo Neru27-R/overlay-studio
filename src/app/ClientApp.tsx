@@ -22,7 +22,7 @@ export function ClientApp() {
 
   return (
     <main className="app-shell">
-      <PageHeader title="Frame Atelier" template={selectedTemplate} showStatus={false} />
+      <PageHeader title="余白工坊" template={selectedTemplate} showStatus={false} />
 
       <section className={`template-picker ${isTemplatePickerOpen ? "is-open" : ""}`}>
         <div className="panel-heading">
