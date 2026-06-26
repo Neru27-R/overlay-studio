@@ -2,6 +2,8 @@ import { ImageDown } from "lucide-react";
 import type { ReactNode } from "react";
 import type { PhotoTemplate } from "../lib/template/types";
 
+const logoMark = new URL("../assets/yohaku-mark.svg", import.meta.url).href;
+
 type Props = {
   eyebrow?: string;
   title: string;
@@ -14,7 +16,8 @@ export function PageHeader({ eyebrow, title, template, actions, showStatus = tru
   return (
     <>
       <header className="topbar">
-        <div>
+        <div className="brand-lockup">
+          <img className="brand-mark" src={logoMark} alt="" draggable={false} aria-hidden="true" />
           {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
           <h1>{title}</h1>
         </div>

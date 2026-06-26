@@ -90,6 +90,28 @@ select:focus-visible {
   padding-bottom: 16px;
 }
 
+.brand-lockup {
+  align-items: center;
+  display: inline-grid;
+  gap: 10px;
+  grid-template-columns: auto 1fr;
+  min-height: 38px;
+}
+
+.brand-mark {
+  display: block;
+  height: 34px;
+  width: 34px;
+}
+
+.brand-lockup .eyebrow {
+  grid-column: 2;
+}
+
+.brand-lockup h1 {
+  grid-column: 2;
+}
+
 .eyebrow {
   color: #e2382f;
   font-size: 12px;

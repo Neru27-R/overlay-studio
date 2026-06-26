@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">余白工坊</title>
+  <rect width="64" height="64" rx="14" fill="#f7f6f0" />
+  <path d="M14 26V14h12" fill="none" stroke="#151515" stroke-width="3" stroke-linecap="square" />
+  <path d="M38 14h12v12" fill="none" stroke="#151515" stroke-width="3" stroke-linecap="square" />
+  <path d="M50 38v12H38" fill="none" stroke="#151515" stroke-width="3" stroke-linecap="square" />
+  <path d="M26 50H14V38" fill="none" stroke="#151515" stroke-width="3" stroke-linecap="square" />
+  <path d="M25 20v24" fill="none" stroke="#8f8f88" stroke-width="1.75" />
+  <path d="M39 20v24" fill="none" stroke="#8f8f88" stroke-width="1.75" />
+  <path d="M20 25h24" fill="none" stroke="#8f8f88" stroke-width="1.75" />
+  <path d="M20 39h24" fill="none" stroke="#8f8f88" stroke-width="1.75" />
+  <rect x="37" y="23" width="7" height="7" fill="#d83a31" />
+</svg>
